@@ -196,7 +196,7 @@ def hyperparameter_tune(X_train_all, y_train_all, X_val_all, y_val_all, hyperpar
 if tune_hyperparameters:
     # Define Hyperparameters 
     hyperparameters = {
-        'C': [10 ** x for x in range(-4, 4)]
+        'C': [10 ** x for x in range(-5, 3)]
         }
 
     # Get the best score and best parameters
@@ -211,5 +211,117 @@ if tune_hyperparameters:
 
     print(f"The Best Accuracy is: {best_score}")
     print(f"with the following parameters: {best_parameters}")
-    
 
+
+def partition_data(data, folds, fold_n, fold_size):
+    """Helper Function to Partition Training and Val Data
+
+    Args:
+        data (numpy array): Dataset
+        folds (Integer): Number of Folds
+        fold_n (Integer): Current Fold
+        fold_size (integer): Size of a fold
+
+    Returns:
+        (numpy array, numpy array): Data split into Train and Val
+    """
+
+    # Training Data Partition
+    train_1 = data[:(folds - fold_n) * fold_size]
+    train_2 = data[(folds - fold_n + 1) * fold_size:]
+    train = np.concatenate((train_1, train_2), axis=0)
+
+    # Validation Data Partition
+    val = data[(folds - fold_n) * fold_size:(folds - fold_n + 1) * fold_size]
+
+    return train, val
+
+       
+def cross_validation_score(X_data, y_data, model, folds=5):
+    """Function to calculate the CV Score
+
+    Args:
+        X_data (numpy array): Data containing X
+        y_data (numpy array): Data containing y 
+        model (model): Model that is initialized
+        folds (int, optional): Number of Folds for CV. Defaults to 5.
+
+    Returns:
+        float: Accuracy Score from CV
+    """
+
+    # Shuffle index
+    index = np.random.permutation(len(X_data))
+
+    fold_size = int(len(X_data) / folds)
+    scores = []
+    for i in range(folds):
+        
+        # Partition Data
+        X_train, X_val = partition_data(X_data[index], folds, i + 1, fold_size)
+        y_train, y_val = partition_data(y_data[index], folds, i + 1, fold_size)
+
+        # Train Model
+        print(f"Training on Fold: {i + 1}")
+        model.fit(X_train, y_train)
+
+        # Predict Values on Validation Set
+        val_pred = model.predict(X_val)
+
+        # Get Accuracy
+        score = accuracy_score(y_val, val_pred)
+        scores.append(score)
+        
+    return sum(scores) / len(scores)
+
+def hyperparameter_cv(X_data, y_data, hyperparameters):
+    """Function to tune hyperparameters using validation set
+
+    Args:
+        X_data (numpy array): Data Examples
+        y_data (numpy array): Labels for data
+        hyperparameters (Dictionary): Dictionary of Hyperparameters to be tuned
+
+    Returns:
+        (float, dictionary): Returns the best score and best parameters
+    """
+
+    # Create Grid of hyperparameters
+    grid = cartesian_product(hyperparameters)
+
+    # Loop through hyperparameters 
+    best_score = 0
+    for hyperparameter in grid:
+        # Initialize Modle
+        model = svm.SVC(kernel='linear', **hyperparameter)
+
+        # Train and Get Accuracy
+        print(f"Training using hyperparameters: {hyperparameter}")
+        score = cross_validation_score(X_data, y_data, model, folds=5)
+        print(f"Accuracy Score: {score}")
+
+        if score > best_score:
+            best_score = score
+            best_parameters = hyperparameter
+    
+    return best_score, best_parameters
+
+if cross_validate:
+    # Get all spam data
+    spam_X = spam['training_data']
+    spam_y = spam['training_labels'].ravel()
+
+    # Define Hyperparameters 
+    hyperparameters = {
+        'C': [10 ** x for x in range(-5, 3)]
+        }
+
+    # Get the best score and best parameters
+    best_score, best_parameters = hyperparameter_cv(
+        X_data=spam_X, 
+        y_data=spam_y, 
+        hyperparameters=hyperparameters
+    )
+
+    print(f"The Best Accuracy is: {best_score}")
+    print(f"with the following parameters: {best_parameters}")
